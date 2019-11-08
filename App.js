@@ -9,9 +9,12 @@ import {
 	StyleSheet,
 	Text,
 	ScrollView,
-	View
+	View,
+
 } from 'react-native';
-import { ImagePicker, Permissions } from 'expo';
+import * as Permissions from 'expo-permissions'
+import * as ImagePicker from 'expo-image-picker'
+import * as FileSystem from 'expo-file-system';
 import uuid from 'uuid';
 import Environment from './config/environment';
 import firebase from './config/firebase';
@@ -19,6 +22,7 @@ import firebase from './config/firebase';
 export default class App extends React.Component {
 	state = {
 		image: null,
+		imageUri: null,
 		uploading: false,
 		googleResponse: null
 	};
@@ -26,6 +30,14 @@ export default class App extends React.Component {
 	async componentDidMount() {
 		await Permissions.askAsync(Permissions.CAMERA_ROLL);
 		await Permissions.askAsync(Permissions.CAMERA);
+		await firebase.auth().signInAnonymously().catch(function(error) {
+			// Handle Errors here.
+			var errorCode = error.code;
+			var errorMessage = error.message;
+			if (error) {
+				console.log('Log in failed: ' + error.code + ':' + errorMessage );
+			}
+		});
 	}
 
 	render() {
@@ -192,8 +204,10 @@ export default class App extends React.Component {
 			this.setState({ uploading: true });
 
 			if (!pickerResult.cancelled) {
-				uploadUrl = await uploadImageAsync(pickerResult.uri);
+				let uploadUrl = await uploadImageAsync(pickerResult.uri);
+				console.log(uploadUrl)
 				this.setState({ image: uploadUrl });
+				this.setState({ imageUri: pickerResult.uri });
 			}
 		} catch (e) {
 			console.log(e);
@@ -206,7 +220,10 @@ export default class App extends React.Component {
 	submitToGoogle = async () => {
 		try {
 			this.setState({ uploading: true });
-			let { image } = this.state;
+			let { image, imageUri } = this.state;
+
+			let base64 = await FileSystem.readAsStringAsync(imageUri, { encoding: 'base64' });
+
 			let body = JSON.stringify({
 				requests: [
 					{
@@ -223,9 +240,11 @@ export default class App extends React.Component {
 							{ type: 'WEB_DETECTION', maxResults: 5 }
 						],
 						image: {
-							source: {
-								imageUri: image
-							}
+							// source: {
+							// 	// imageUrl: image
+							// 	imageUri: "https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_272x92dp.png"
+							// }
+							content: base64
 						}
 					}
 				]
